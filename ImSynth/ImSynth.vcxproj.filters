@@ -18,31 +18,31 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImGui\gl3w.c">
+    <ClCompile Include="vendor\ImGui\gl3w.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImGui\imgui.cpp">
+    <ClCompile Include="vendor\ImGui\imgui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImGui\imgui_draw.cpp">
+    <ClCompile Include="vendor\ImGui\imgui_draw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImGui\imgui_impl_glfw.cpp">
+    <ClCompile Include="vendor\ImGui\imgui_impl_glfw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImGui\imgui_impl_opengl3.cpp">
+    <ClCompile Include="vendor\ImGui\imgui_impl_opengl3.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImGui\imgui_tables.cpp">
+    <ClCompile Include="vendor\ImGui\imgui_tables.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImGui\imgui_widgets.cpp">
+    <ClCompile Include="vendor\ImGui\imgui_widgets.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImPlot\implot.cpp">
+    <ClCompile Include="vendor\ImPlot\implot.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\ImPlot\implot_items.cpp">
+    <ClCompile Include="vendor\ImPlot\implot_items.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="lib\Synth\WaveTableOsc.cpp">
@@ -50,55 +50,55 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="lib\ImGui\gl3w.h">
+    <ClInclude Include="vendor\ImGui\gl3w.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\glcorearb.h">
+    <ClInclude Include="vendor\ImGui\glcorearb.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\glfw3.h">
+    <ClInclude Include="vendor\ImGui\glfw3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\glfw3native.h">
+    <ClInclude Include="vendor\ImGui\glfw3native.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\imconfig.h">
+    <ClInclude Include="vendor\ImGui\imconfig.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\imgui.h">
+    <ClInclude Include="vendor\ImGui\imgui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\imgui_impl_glfw.h">
+    <ClInclude Include="vendor\ImGui\imgui_impl_glfw.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\imgui_impl_opengl3.h">
+    <ClInclude Include="vendor\ImGui\imgui_impl_opengl3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\imgui_internal.h">
+    <ClInclude Include="vendor\ImGui\imgui_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\MIDI\ImGui_Piano_imp.h">
+    <ClInclude Include="vendor\ImGui_Piano\ImGui_Piano_imp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\imstb_rectpack.h">
+    <ClInclude Include="vendor\ImGui\imstb_rectpack.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\imstb_textedit.h">
+    <ClInclude Include="vendor\ImGui\imstb_textedit.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImGui\imstb_truetype.h">
+    <ClInclude Include="vendor\ImGui\imstb_truetype.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImPlot\implot.h">
+    <ClInclude Include="vendor\ImPlot\implot.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\ImPlot\implot_internal.h">
+    <ClInclude Include="vendor\ImPlot\implot_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\MIDI\MIDI.h">
+    <ClInclude Include="lib\MIDI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lib\portaudio\portaudio.h">
+    <ClInclude Include="vendor\portaudio\portaudio.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="lib\Synth\WaveTableOsc.h">
