@@ -203,6 +203,7 @@ protected:
 };
 
 void fft(int N, vector<myFloat>& ar, vector<myFloat>& ai);
+void makeSineTable(WaveTableOsc* osc, int len, int tableIndex);
 void defineTriangle(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai);
 void defineSawtooth(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai);
 void defineSquare(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai);

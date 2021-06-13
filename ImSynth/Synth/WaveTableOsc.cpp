@@ -27,107 +27,14 @@ using namespace std;
 
 #include "WaveTableOsc.h"
 
-// pwm
-//void testPWM(void) {    
-//    // make an oscillator with wavetable
-//    WaveTableOsc *osc = new WaveTableOsc();
-//    setSawtoothOsc(osc, baseFrequency);
-//    
-//    // pwm
-//    WaveTableOsc *mod = new WaveTableOsc();
-//    const int sineTableLen = 2048;
-//    float sineTable[sineTableLen];
-//    for (int idx = 0; idx < sineTableLen; ++idx)
-//        sineTable[idx] = sin((float)idx / sineTableLen * M_PI * 2);
-//    mod->addWaveTable(sineTableLen, sineTable, 1.0);
-//    mod->setFrequency(0.3/sampleRate);
-//    
-//    osc->setFrequency(110.0/sampleRate);
-//    
-//    // time test
-//    clock_t start, finish;
-//    start = clock();
-//    
-//    // run the oscillator
-//    const int numSamples = sampleRate * numSecs;
-//    float *soundBuf = new float [numSamples];
-//    
-//    for (int idx = 0; idx < numSamples; idx ++) {
-//        osc->setPhaseOffset((mod->getOutput() * 0.95 + 1.0) * 0.5);
-//        soundBuf[idx] = osc->getOutputMinusOffset() * gainMult;    // square wave from sawtooth
-//        mod->updatePhase();        
-//        osc->updatePhase(); 
-//    }
-//    
-//    // time test
-//    finish = clock();
-//    double elapsed = (finish - start)/(double)CLOCKS_PER_SEC;
-//    cout << "Elapsed time: " << elapsed<< "\n";
-//    
-//    // q&d fade to avoid tick at end (0.05s)
-//    for (int count = sampleRate * 0.05; count >= 0; --count) {
-//        soundBuf[numSamples-count] *= count / (sampleRate * 0.05);
-//    }
-//    
-//    writeFloatSound(numSamples, soundBuf);
-//    delete [] soundBuf;
-//    
-//    return;
-//}
-
-
-// three unison detuned saws
-//void testThreeOsc(void) {        
-//    // make an oscillator with wavetable
-//    WaveTableOsc *osc1 = new WaveTableOsc();
-//    WaveTableOsc *osc2 = new WaveTableOsc();
-//    WaveTableOsc *osc3 = new WaveTableOsc();
-//    
-//    setSawtoothOsc(osc1, baseFrequency);
-//    setSawtoothOsc(osc2, baseFrequency);
-//    setSawtoothOsc(osc3, baseFrequency);
-//    
-//    // time test
-//    clock_t start, finish;
-//    start = clock();
-//    
-//    // run the oscillator
-//    const int numSamples = sampleRate * numSecs;
-//    float *soundBuf = new float [numSamples];
-//    
-//    osc1->setFrequency(111.0*.5/sampleRate);
-//    osc2->setFrequency(112.0*.5/sampleRate);
-//    osc3->setFrequency(55.0/sampleRate);
-//    
-//    for (int idx = 0; idx < numSamples; idx ++) {
-//        soundBuf[idx] = (osc1->getOutput() + osc2->getOutput() + osc3->getOutput()) * 0.5 * gainMult;    // square wave from sawtooth
-//        osc1->updatePhase();        
-//        osc2->updatePhase(); 
-//        osc3->updatePhase(); 
-//    }
-//    
-//    // time test
-//    finish = clock();
-//    double elapsed = (finish - start)/(double)CLOCKS_PER_SEC;
-//    cout << "Elapsed time: " << elapsed<< "\n";
-//    
-//    // q&d fade to avoid tick at end (0.05s)
-//    for (int count = sampleRate * 0.05; count >= 0; --count) {
-//        soundBuf[numSamples-count] *= count / (sampleRate * 0.05);
-//    }
-//    
-//    writeFloatSound(numSamples, soundBuf);
-//    delete [] soundBuf;
-//    
-//    return;
-//}
-
 //
 // setSawtoothOsc
 //
 // make set of wavetables for sawtooth oscillator
 //
 void setOsc(WaveTableOsc *osc, float baseFreq, int waveShape) {    
+
+    
     // calc number of harmonics where the highest harmonic baseFreq and lowest alias an octave higher would meet
     int maxHarms = sampleRate / (3.0 * baseFreq) + 0.5;
 
@@ -147,28 +54,53 @@ void setOsc(WaveTableOsc *osc, float baseFreq, int waveShape) {
     double topFreq = baseFreq * 2.0 / sampleRate;
     myFloat scale = 0.0;
     int tableIndex = 0;
-    for (; maxHarms >= 1; maxHarms >>= 1) {
-        if (waveShape == 0) {
-            defineTriangle(tableLen, maxHarms, ar, ai);
-        } else if (waveShape == 1) {
-            defineSawtooth(tableLen, maxHarms, ar, ai);
-        } else if (waveShape == 2) {
-            defineSquare(tableLen, maxHarms, ar, ai);
+
+    // if waveShape is sine, populate with a single wavetable (no band limiting needed)
+    if (waveShape == 0) {
+        for (; maxHarms >= 1; maxHarms >>= 1) {
+            makeSineTable(osc, tableLen, tableIndex);
+            tableIndex++;
         }
-        scale = makeWaveTable(osc, tableLen, ar, ai, scale, topFreq, tableIndex);
-        topFreq *= 2;
-        if (tableLen > constantRatioLimit) // variable table size (constant oversampling but with minimum table size)
-            tableLen >>= 1;
-        tableIndex++;
+    } else {
+        // these waves require band limiting
+        for (; maxHarms >= 1; maxHarms >>= 1) {
+            if (waveShape == 1) {
+                defineTriangle(tableLen, maxHarms, ar, ai);
+            }
+            else if (waveShape == 2) {
+                defineSawtooth(tableLen, maxHarms, ar, ai);
+            }
+            else if (waveShape == 3) {
+                defineSquare(tableLen, maxHarms, ar, ai);
+            }
+            scale = makeWaveTable(osc, tableLen, ar, ai, scale, topFreq, tableIndex);
+            topFreq *= 2;
+            if (tableLen > constantRatioLimit) // variable table size (constant oversampling but with minimum table size)
+                tableLen >>= 1;
+            tableIndex++;
+        }
     }
 }
 
+// special case for sine where band limiting is not needed
+void makeSineTable(WaveTableOsc* osc, int len, int tableIndex)
+{
+    double topFreq = 1.0;
+    vector<float> wave;
+
+    for (int idx = 0; idx < len; idx++) {
+        wave.push_back(sin(2.0 * M_PI * (float)idx / (float)len));
+    }
+
+    osc->addWaveTable(len, wave, topFreq, tableIndex);
+}
 
 //
 // if scale is 0, auto-scales
 // returns scaling factor (0.0 if failure), and wavetable in ai array
 //
-float makeWaveTable(WaveTableOsc *osc, int len, vector<myFloat>& ar, vector<myFloat>& ai, myFloat scale, double topFreq, int tableIndex) {
+float makeWaveTable(WaveTableOsc *osc, int len, vector<myFloat>& ar, vector<myFloat>& ai, myFloat scale, double topFreq, int tableIndex)
+{
     fft(len, ar, ai);
     
     if (scale == 0.0) {
@@ -273,49 +205,8 @@ void fft(int N, vector<myFloat>& ar, vector<myFloat>& ai)
     }
 }
 
-
-//
-// defineSawtooth
-//
-// prepares sawtooth harmonics for ifft
-//
-void defineSawtooth(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai) {
-    if (numHarmonics > (len >> 1))
-        numHarmonics = (len >> 1);
-
-    // clear
-    for (int idx = 0; idx < len; idx++) {
-        ai[idx] = 0;
-        ar[idx] = 0;
-    }
-
-    // sawtooth
-    for (int idx = 1, jdx = len - 1; idx <= numHarmonics; idx++, jdx--) {
-        myFloat temp = -1.0 / idx;
-        ar[idx] = -temp;
-        ar[jdx] = temp;
-    }
-}
-
-void defineSquare(int len, int numHarmonics, vector<myFloat> & ar, vector<myFloat> & ai) {
-    if (numHarmonics > (len >> 1))
-        numHarmonics = (len >> 1);
-
-    // clear
-    for (int idx = 0; idx < len; idx++) {
-        ai[idx] = 0;
-        ar[idx] = 0;
-    }
-
-    // square
-    for (int idx = 1, jdx = len - 1; idx <= numHarmonics; idx++, jdx--) {
-        myFloat temp = idx & 0x01 ? 1.0 / idx : 0.0;
-        ar[idx] = -temp;
-        ar[jdx] = temp;
-    }
-}
-
-void defineTriangle(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai) {
+void defineTriangle(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai)
+{
     if (numHarmonics > (len >> 1))
         numHarmonics = (len >> 1);
 
@@ -333,88 +224,46 @@ void defineTriangle(int len, int numHarmonics, vector<myFloat>& ar, vector<myFlo
         ar[jdx] = temp;
     }
 }
-    // examples of other waves
-    /*
-     
-     */
-    /*
-     // triangle
-     float sign = 1;
-     for (int idx = 1, jdx = len - 1; idx <= numHarmonics; idx++, jdx--) {
-     myFloat temp = idx & 0x01 ? 1.0 / (idx * idx) * (sign = -sign) : 0.0;
-     ar[idx] = -temp;
-     ar[jdx] = temp;
-     }
-     */
-
 
 //
-// quick & dirty wave file
+// defineSawtooth
 //
+// prepares sawtooth harmonics for ifft
+//
+void defineSawtooth(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai)
+{
+    if (numHarmonics > (len >> 1))
+        numHarmonics = (len >> 1);
 
-//enum {
-//    /* keep sorted for wav_w64_format_str() */
-//	WAVE_FORMAT_UNKNOWN					= 0x0000,		/* Microsoft Corporation */
-//	WAVE_FORMAT_PCM	 					= 0x0001, 		/* Microsoft PCM format */
-//	WAVE_FORMAT_MS_ADPCM				= 0x0002,		/* Microsoft ADPCM */
-//	WAVE_FORMAT_IEEE_FLOAT				= 0x0003,		/* Micrososft 32 bit float format */
-//};
-//
-//inline void writeFourCC(uint32_t val, uint8_t **bytePtr) {
-//	*(*bytePtr)++ = val >> 24;
-//	*(*bytePtr)++ = val >> 16;
-//	*(*bytePtr)++ = val >> 8;
-//	*(*bytePtr)++ = val;
-//}
-//
-//inline void write4Bytes(uint32_t val, uint8_t **bytePtr) {
-//	*(*bytePtr)++ = val;
-//	*(*bytePtr)++ = val >> 8;
-//	*(*bytePtr)++ = val >> 16;
-//	*(*bytePtr)++ = val >> 24;
-//}
-//
-//inline void write2Bytes(uint32_t val, uint8_t **bytePtr) {
-//	*(*bytePtr)++ = val;
-//	*(*bytePtr)++ = val >> 8;
-//}
+    // clear
+    for (int idx = 0; idx < len; idx++) {
+        ai[idx] = 0;
+        ar[idx] = 0;
+    }
 
-//void writeFloatSound(int len, float *wave) {    
-//	const int numChannels = 1;
-//    
-//	// build file
-//	const int bytesPersample = 4;
-//	const int soundChunkLen = len * bytesPersample;
-//    
-//	uint8_t bytes[58];
-//	uint8_t *bytePtr = bytes;
-//    
-//    writeFourCC('RIFF', &bytePtr);
-//    write4Bytes(4 + 26 + 12 + 8 + soundChunkLen, &bytePtr); // chunk size
-//    writeFourCC('WAVE', &bytePtr);
-//    writeFourCC('fmt ', &bytePtr);
-//    write4Bytes(18, &bytePtr);                              // size of subchunk that follows
-//    write2Bytes(WAVE_FORMAT_IEEE_FLOAT, &bytePtr);          // format
-//    write2Bytes(numChannels, &bytePtr);                     // number of channels
-//    write4Bytes(sampleRate, &bytePtr);                      // sample rate
-//    write4Bytes(sampleRate * numChannels * bytesPersample, &bytePtr);  // byte rate
-//    write2Bytes(numChannels * bytesPersample, &bytePtr);    // block align
-//    write2Bytes(bytesPersample * 8, &bytePtr);              // bits per sample
-//    write2Bytes(0, &bytePtr);                               // cbSize    
-//    writeFourCC('fact', &bytePtr);
-//    write4Bytes(4, &bytePtr);                               // size of subchunk that follows
-//    write4Bytes(numChannels * len, &bytePtr);               // size of subchunk that follows
-//	writeFourCC('data', &bytePtr);
-//    write4Bytes(len * numChannels * bytesPersample, &bytePtr); // subchunk size
-//    
-//	// write array to file    
-//	FILE *pFile;
-//	pFile = fopen("oscillator test.wav", "wb");
-//	if (pFile) {
-//        fwrite(bytes, 1, sizeof(bytes), pFile);
-//        fwrite(wave, sizeof(*wave), len, pFile);            // note: little endian
-//		fclose(pFile);
-//	}
-//	
-//    return;
-//}
+    // sawtooth
+    for (int idx = 1, jdx = len - 1; idx <= numHarmonics; idx++, jdx--) {
+        myFloat temp = -1.0 / idx;
+        ar[idx] = -temp;
+        ar[jdx] = temp;
+    }
+}
+
+void defineSquare(int len, int numHarmonics, vector<myFloat> & ar, vector<myFloat> & ai)
+{
+    if (numHarmonics > (len >> 1))
+        numHarmonics = (len >> 1);
+
+    // clear
+    for (int idx = 0; idx < len; idx++) {
+        ai[idx] = 0;
+        ar[idx] = 0;
+    }
+
+    // square
+    for (int idx = 1, jdx = len - 1; idx <= numHarmonics; idx++, jdx--) {
+        myFloat temp = idx & 0x01 ? 1.0 / idx : 0.0;
+        ar[idx] = -temp;
+        ar[jdx] = temp;
+    }
+}

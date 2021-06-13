@@ -23,24 +23,6 @@
 
 using namespace std;
 
-//class Scope {
-//public:
-//    Scope() {
-//        buffer_.resize(1280);
-//    }
-//    void setBuffer(vector<double> buffer)
-//    {
-//        buffer_ = buffer;
-//    }
-//    vector<double> getBuffer()
-//    {
-//        return buffer_;
-//    }
-//private:
-//    static vector<double> buffer_ = new vector<double>;
-//};
-//Scope* OscScope;
-
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -283,7 +265,7 @@ int main(void)
         if (showOscillators) {
             ImGui::Begin("Oscillators", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
-            const char* waveShape[] = { "Triangle", "Saw", "Square" };
+            const char* waveShape[] = {"Sine", "Triangle", "Saw", "Square" };
 
             for (int n = 0; n < numberOfOscillators; n++) {
                 ImGui::PushID(n);
