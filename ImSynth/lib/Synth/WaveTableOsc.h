@@ -118,13 +118,8 @@ public:
         int intPart = temp;
         float fracPart = temp - intPart;
 
-        // wrap to avoid vector subscript out of range with intPart + 1
-        if (intPart == thisTable->waveTableLen) {
-            intPart = 0;
-        }
-
-        float samp0 = thisTable->waveTable_[intPart];
-        float samp1 = thisTable->waveTable_[intPart + 1];
+        float samp0 = thisTable->waveTable_[intPart % thisTable->waveTableLen];
+        float samp1 = thisTable->waveTable_[(intPart + 1) % thisTable->waveTableLen];
         return samp0 + (samp1 - samp0) * fracPart;
     }
 
@@ -145,8 +140,8 @@ public:
         float temp = mPhasor * len;
         int intPart = temp;
         float fracPart = temp - intPart;
-        float samp0 = wave[intPart];
-        float samp1 = wave[intPart + 1];
+        float samp0 = wave[intPart % thisTable->waveTableLen];
+        float samp1 = wave[(intPart + 1) % thisTable->waveTableLen];
         float samp = samp0 + (samp1 - samp0) * fracPart;
 
         // and linear again for the offset part
@@ -178,7 +173,6 @@ public:
             newTable->waveTableLen = len;
             newTable->topFreq = topFreq;
             newTable->waveTable_ = waveTableIn;
-            newTable->waveTable_.push_back(waveTableIn.front());
 
             mWaveTables[tableIndex] = *newTable;
             return 0;
