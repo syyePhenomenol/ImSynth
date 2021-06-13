@@ -43,6 +43,9 @@ using namespace std;
 
 #define myFloat double      /* float or double, to set the resolution of the FFT, etc. (the resulting wavetables are always float) */
 
+#define numberOfShapes (4) // total number of wave shapes implemented
+#define maxUnisonVoices (8) // maximum number of oscillators per stack
+
 struct waveTable {
     double topFreq;
     int waveTableLen;
@@ -118,8 +121,13 @@ public:
         int intPart = temp;
         float fracPart = temp - intPart;
 
-        float samp0 = thisTable->waveTable_[intPart % thisTable->waveTableLen];
-        float samp1 = thisTable->waveTable_[(intPart + 1) % thisTable->waveTableLen];
+        // wrap to avoid vector subscript out of range with intPart + 1
+        if (intPart == thisTable->waveTableLen) {
+            intPart = 0;
+        }
+
+        float samp0 = thisTable->waveTable_[intPart];
+        float samp1 = thisTable->waveTable_[intPart + 1];
         return samp0 + (samp1 - samp0) * fracPart;
     }
 
@@ -168,11 +176,11 @@ public:
     int addWaveTable(int len, vector<float>& waveTableIn, double topFreq, int tableIndex) {
         if (tableIndex < numWaveTableSlots) {
             mNumWaveTables = tableIndex;
-            //waveTable* newTable = &mWaveTables[mNumWaveTables];
             waveTable* newTable = new waveTable;
             newTable->waveTableLen = len;
             newTable->topFreq = topFreq;
             newTable->waveTable_ = waveTableIn;
+            newTable->waveTable_.push_back(waveTableIn.front());
 
             mWaveTables[tableIndex] = *newTable;
             return 0;
@@ -196,8 +204,86 @@ protected:
     vector<waveTable> mWaveTables;
 };
 
+class WaveTableOscStack {
+public:
+    WaveTableOscStack(WaveTableOsc* osc, int shape) {
+        for (int n = 0; n < maxUnisonVoices; n++) {
+            mOscillators.push_back(*osc);
+        }
+    }
+
+    ~WaveTableOscStack(void) {
+        mOscillators.clear();
+    }
+    
+    float processAll() {
+        float out = 0.0;
+
+        if (stackOn) {
+            for (int n = 0; n < unisonVoices; n++) {
+                out += mOscillators[n].process();
+            }
+        }
+        return out * amplitude;
+
+        // implement panning spread
+    }
+
+    void setAmplitude(double amp) {
+        amplitude = amp;
+    }
+
+    // freq is already normalised
+    void setFrequencies(double freq) {
+        // need to add in detune stuff
+        // implement octave/semitone
+
+        for (int n = 0; n < unisonVoices; n++) {
+            mOscillators[n].setFrequency(freq);
+        }
+    }
+
+    void setShapes(WaveTableOsc* osc) {
+        for (int n = 0; n < unisonVoices; n++) {
+            mOscillators[n] = *osc;
+        }
+        //stackShape = shape;
+    }
+
+    void setVoices (int voices) {
+        unisonVoices = voices;
+
+        for (int n = 1; n < unisonVoices; n++) {
+            mOscillators[n] = mOscillators.front();
+        }
+
+        // to-do: add something to update detuneMultipliers
+    }
+
+    void resetPhases() {
+        for (int n = 1; n < unisonVoices; n++) {
+            mOscillators[n].resetPhase();
+        }
+    }
+
+    // parameters that can be directly edited by external processes
+    bool    stackOn = true;
+    int     shape = 0;
+    float   unisonSpread = 100.0;
+    float   unisonDetune = 0.0;
+    int     pan = 0;
+    float   amplitude = 1.0;
+
+protected:
+    vector<WaveTableOsc> mOscillators;
+    vector<float> detuneMultipliers; // calculated when number of voices changes
+    double  freq = 0.0;
+    int     octave = 0;
+    int     unisonVoices = 1;
+};
+
 void fft(int N, vector<myFloat>& ar, vector<myFloat>& ai);
-void makeSineTable(WaveTableOsc* osc, int len, int tableIndex);
+void defineSine(int len, vector<myFloat>& ar, vector<myFloat>& ai);
 void defineTriangle(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai);
 void defineSawtooth(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai);
 void defineSquare(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai);

@@ -23,7 +23,6 @@
 #include "lib/MIDI.h"
 #include "lib/Synth/WaveTableOsc.h"
 
-
 using namespace std;
 
 static void glfw_error_callback(int error, const char* description)
@@ -40,22 +39,11 @@ static void glfw_error_callback(int error, const char* description)
 
 #define baseFrequency (20)  /* starting frequency of first table */
 
-int numberOfOscillators = 3;
+vector<WaveTableOsc> templateOscillators(numberOfShapes);
 
-vector<WaveTableOsc> oscillators(numberOfOscillators);
+int numberOfOscStacks = 1;
 
-struct oscParameters {
-    bool On = true;
-    int Shape = 0;
-    int Octave = 0;
-    int Semitone = 0;
-    int Voices = 1;
-    float Spread = 100.0;
-    float Detune = 0.0;
-    float Amplitude = 1.0;
-};
-
-vector<oscParameters> allOscParameters(numberOfOscillators);
+vector<WaveTableOscStack> oscStacks;
 
 float detune = 0.0;
 float detuneFactor = 1.0;
@@ -68,6 +56,8 @@ static vector<float> midiPitches;
 bool holdNote = false;
 bool retrig = false;
 bool keyPressed[128] = { 0 };
+int prevNoteActive = 128; // 128 = None
+int prevNote = 128;
 
 vector<float> initMidiPitches()
 {
@@ -76,6 +66,20 @@ vector<float> initMidiPitches()
         pitches[n] = 440 * pow(2, (float(n) - 69.0) / 12.0);
     }
     return pitches;
+}
+
+// Force a push of frequencies (ie. after oscillators have been reset again)
+void pushFreqs()
+{
+    for (int n = 0; n < 128; n++) {
+        if (keyPressed[n] || holdNote) {
+            double freq = midiPitches[prevNote];
+            for (int i = 0; i < numberOfOscStacks; i++) {
+                oscStacks[i].setFrequencies(freq / SAMPLE_RATE);
+            }
+            break;
+        }
+    }
 }
 
 bool pianoCallback(void* UserData, int Msg, int Key, float Vel)
@@ -87,13 +91,8 @@ bool pianoCallback(void* UserData, int Msg, int Key, float Vel)
     if (Msg == NoteOn) {
         keyPressed[Key] = true; soundOn = true;
         double freq = midiPitches[Key];
-        oscillators[0].setFrequency(freq / SAMPLE_RATE);
-        oscillators[1].setFrequency(freq * detuneFactor / SAMPLE_RATE);
-        oscillators[2].setFrequency(freq / detuneFactor / SAMPLE_RATE);
-        if (retrig) {
-            oscillators[0].resetPhase();
-            oscillators[1].resetPhase();
-            oscillators[2].resetPhase();
+        for (int n = 0; n < numberOfOscStacks; n++) {
+            oscStacks[n].setFrequencies(freq / SAMPLE_RATE);
         }
     }
     if (Msg == NoteOff) {
@@ -128,9 +127,9 @@ static int Render_Audio(const void* inputBuffer,
         double sample = 0.0;
 
         if (soundOn) {
-            sample = oscillators[0].process() * allOscParameters[0].Amplitude
-                + oscillators[1].process() * allOscParameters[1].Amplitude
-                + oscillators[2].process() * allOscParameters[2].Amplitude;
+            for (int n = 0; n < numberOfOscStacks; n++) {
+                sample += oscStacks[n].processAll();
+            }
             sample *= gAmplitude;
         } else {
             sample = 0.0;
@@ -193,10 +192,15 @@ int main(void)
     bool showOscilloscope = true;
     ImVec4 clear_color = ImVec4(0.24f, 0.35f, 0.56f, 1.00f);
 
-    // Initialise oscillators
-    setOsc(&oscillators[0], baseFrequency, 0);
-    setOsc(&oscillators[1], baseFrequency, 0);
-    setOsc(&oscillators[2], baseFrequency, 0);
+    // Initialise oscillator templates
+    for (int n = 0; n < numberOfShapes; n++) {
+        setOsc(&templateOscillators[n], baseFrequency, n);
+    }
+
+    for (int n = 0; n < numberOfOscStacks; n++) {
+        WaveTableOscStack* stack = new WaveTableOscStack(&templateOscillators[0], 0);
+        oscStacks.push_back(*stack);
+    }
 
     midiPitches = initMidiPitches();
 
@@ -236,9 +240,6 @@ int main(void)
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-        static int prevNoteActive = 128; // 128 = None
-        static int prevNote = 128;
-
         if (prevNoteActive != 128) {
             prevNote = prevNoteActive;
         }
@@ -276,26 +277,27 @@ int main(void)
 
             const char* waveShape[] = {"Sine", "Triangle", "Saw", "Square" };
 
-            for (int n = 0; n < numberOfOscillators; n++) {
+            for (int n = 0; n < numberOfOscStacks; n++) {
                 ImGui::PushID(n);
 
                 ImGui::Text("Oscillator %u", n);
-                if (ImGui::Combo("Wave shape", &allOscParameters[n].Shape, waveShape, IM_ARRAYSIZE(waveShape))) {
-                    setOsc(&oscillators[n], baseFrequency, allOscParameters[n].Shape);
+                if (ImGui::Combo("Wave shape", &oscStacks[n].shape, waveShape, IM_ARRAYSIZE(waveShape))) {
+                    oscStacks[n].setShapes(&templateOscillators[oscStacks[n].shape]);
+                    pushFreqs();
                 }
-                ImGui::SliderFloat("Amplitude", &allOscParameters[n].Amplitude, 0.0, 1.0);
+                ImGui::SliderFloat("Amplitude", &oscStacks[n].amplitude, 0.0, 1.0);
 
                 ImGui::PopID();
             }
 
-            ImGui::TextUnformatted("");
-            ImGui::Checkbox("Retrig", &retrig);
-            if (ImGui::SliderFloat("Detune", &detune, 0.0, 100.0)) {
-                detuneFactor = pow(2, (detune / 100.0) / 12.0);
-                double freq = midiPitches[prevNote];
-                oscillators[1].setFrequency(freq * detuneFactor / SAMPLE_RATE);
-                oscillators[2].setFrequency(freq / detuneFactor / SAMPLE_RATE);
-            }
+            //ImGui::TextUnformatted("");
+            //ImGui::Checkbox("Retrig", &retrig);
+            //if (ImGui::SliderFloat("Detune", &detune, 0.0, 100.0)) {
+            //    detuneFactor = pow(2, (detune / 100.0) / 12.0);
+            //    double freq = midiPitches[prevNote];
+            //    oscillators[1].setFrequency(freq * detuneFactor / SAMPLE_RATE);
+            //    oscillators[2].setFrequency(freq / detuneFactor / SAMPLE_RATE);
+            //}
             //ImGui::Text("Detune factor: %.3f", detuneFactor);
             ImGui::End();
         }

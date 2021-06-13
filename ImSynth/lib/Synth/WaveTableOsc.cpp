@@ -34,7 +34,6 @@ using namespace std;
 //
 void setOsc(WaveTableOsc *osc, float baseFreq, int waveShape) {    
 
-    
     // calc number of harmonics where the highest harmonic baseFreq and lowest alias an octave higher would meet
     int maxHarms = sampleRate / (3.0 * baseFreq) + 0.5;
 
@@ -55,44 +54,22 @@ void setOsc(WaveTableOsc *osc, float baseFreq, int waveShape) {
     myFloat scale = 0.0;
     int tableIndex = 0;
 
-    // if waveShape is sine, populate with a single wavetable (no band limiting needed)
-    if (waveShape == 0) {
-        for (; maxHarms >= 1; maxHarms >>= 1) {
-            makeSineTable(osc, tableLen, tableIndex);
-            tableIndex++;
+    for (; maxHarms >= 1; maxHarms >>= 1) {
+        if (waveShape == 0) {
+            defineSine(tableLen, ar, ai);
+        } else if (waveShape == 1) {
+            defineTriangle(tableLen, maxHarms, ar, ai);
+        } else if (waveShape == 2) {
+            defineSawtooth(tableLen, maxHarms, ar, ai);
+        } else if (waveShape == 3) {
+            defineSquare(tableLen, maxHarms, ar, ai);
         }
-    } else {
-        // these waves require band limiting
-        for (; maxHarms >= 1; maxHarms >>= 1) {
-            if (waveShape == 1) {
-                defineTriangle(tableLen, maxHarms, ar, ai);
-            }
-            else if (waveShape == 2) {
-                defineSawtooth(tableLen, maxHarms, ar, ai);
-            }
-            else if (waveShape == 3) {
-                defineSquare(tableLen, maxHarms, ar, ai);
-            }
-            scale = makeWaveTable(osc, tableLen, ar, ai, scale, topFreq, tableIndex);
-            topFreq *= 2;
-            if (tableLen > constantRatioLimit) // variable table size (constant oversampling but with minimum table size)
-                tableLen >>= 1;
-            tableIndex++;
-        }
+        scale = makeWaveTable(osc, tableLen, ar, ai, scale, topFreq, tableIndex);
+        topFreq *= 2;
+        if (tableLen > constantRatioLimit) // variable table size (constant oversampling but with minimum table size)
+            tableLen >>= 1;
+        tableIndex++;
     }
-}
-
-// special case for sine where band limiting is not needed
-void makeSineTable(WaveTableOsc* osc, int len, int tableIndex)
-{
-    double topFreq = 1.0;
-    vector<float> wave;
-
-    for (int idx = 0; idx < len; idx++) {
-        wave.push_back(sin(2.0 * M_PI * (float)idx / (float)len));
-    }
-
-    osc->addWaveTable(len, wave, topFreq, tableIndex);
 }
 
 //
@@ -103,17 +80,19 @@ float makeWaveTable(WaveTableOsc *osc, int len, vector<myFloat>& ar, vector<myFl
 {
     fft(len, ar, ai);
     
+    myFloat max = 0;
+
     if (scale == 0.0) {
         // calc normal
-        myFloat max = 0;
         for (int idx = 0; idx < len; idx++) {
             myFloat temp = fabs(ai[idx]);
-            if (max < temp)
+            if (max < temp) {
                 max = temp;
+            }
         }
         scale = 1.0 / max * .999;        
     }
-    
+
     // normalize
     vector<float> wave(len);
     for (int idx = 0; idx < len; idx++)
@@ -205,6 +184,18 @@ void fft(int N, vector<myFloat>& ar, vector<myFloat>& ai)
     }
 }
 
+void defineSine(int len, vector<myFloat>& ar, vector<myFloat>& ai)
+{
+    // clear
+    for (int idx = 0; idx < len; idx++) {
+        ai[idx] = 0;
+        ar[idx] = 0;
+    }
+
+    // sine
+    ar[1] = 1.0;
+}
+
 void defineTriangle(int len, int numHarmonics, vector<myFloat>& ar, vector<myFloat>& ai)
 {
     if (numHarmonics > (len >> 1))
@@ -263,7 +254,7 @@ void defineSquare(int len, int numHarmonics, vector<myFloat> & ar, vector<myFloa
     // square
     for (int idx = 1, jdx = len - 1; idx <= numHarmonics; idx++, jdx--) {
         myFloat temp = idx & 0x01 ? 1.0 / idx : 0.0;
-        ar[idx] = -temp;
-        ar[jdx] = temp;
+        ar[idx] = temp;
+        ar[jdx] = -temp;
     }
 }
