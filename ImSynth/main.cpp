@@ -7,19 +7,22 @@
 #include <algorithm>
 #include <numeric>
 
-#include "portaudio.h"
-#include "MIDI.h"
-#include "WaveTableOsc.h"
-
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "gl3w.h"
 #include "glfw3.h"
 
-#include "ImGui_Piano_imp.h"
 #include "implot.h"
 #include "implot_internal.h"
+
+#include "ImGui_Piano_imp.h"
+
+#include "portaudio.h"
+
+#include "lib/MIDI.h"
+#include "lib/Synth/WaveTableOsc.h"
+
 
 using namespace std;
 
