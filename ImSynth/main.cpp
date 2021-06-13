@@ -42,7 +42,13 @@ int numberOfOscillators = 3;
 vector<WaveTableOsc> oscillators(numberOfOscillators);
 
 struct oscParameters {
+    bool On = true;
     int Shape = 0;
+    int Octave = 0;
+    int Semitone = 0;
+    int Voices = 1;
+    float Spread = 100.0;
+    float Detune = 0.0;
     float Amplitude = 1.0;
 };
 
