@@ -289,3 +289,12 @@ unordered_map<string, int> MIDI_name_to_number
 	{"F#9", 126},
 	{"G9", 127}
 };
+
+vector<float> midiPitches(128, 0.0);
+
+void initMidiPitches()
+{
+	for (int n = 0; n < 128; n++) {
+		midiPitches[n] = 440 * pow(2, (float(n) - 69.0) / 12.0);
+	}
+}

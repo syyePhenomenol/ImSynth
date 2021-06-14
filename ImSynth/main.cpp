@@ -22,6 +22,7 @@
 
 #include "lib/MIDI.h"
 #include "lib/Synth/WaveTableOsc.h"
+#include "lib/Synth/detune.h"
 
 using namespace std;
 
@@ -39,8 +40,11 @@ static void glfw_error_callback(int error, const char* description)
 
 #define baseFrequency (20)  /* starting frequency of first table */
 
-vector<WaveTableOsc> templateOscillators(numberOfShapes);
+//vector<WaveTableOsc> templateOscillators(numberOfShapes);
 
+vector<vector<waveTable>> templateTables(numberOfShapes);
+
+int maxOscStacks = 3;
 int numberOfOscStacks = 1;
 
 vector<WaveTableOscStack> oscStacks;
@@ -49,24 +53,14 @@ float detune = 0.0;
 float detuneFactor = 1.0;
 
 bool soundOn = false;
-float gAmplitude = 0.05f;
+float gAmplitude = 0.02f;
 unsigned int audioOutChannels = 2;
 
-static vector<float> midiPitches;
 bool holdNote = false;
 bool retrig = false;
 bool keyPressed[128] = { 0 };
 int prevNoteActive = 128; // 128 = None
 int prevNote = 128;
-
-vector<float> initMidiPitches()
-{
-    vector<float> pitches(128, 0.0);
-    for (int n = 0; n < 128; n++) {
-        pitches[n] = 440 * pow(2, (float(n) - 69.0) / 12.0);
-    }
-    return pitches;
-}
 
 // Force a push of frequencies (ie. after oscillators have been reset again)
 void pushFreqs()
@@ -146,6 +140,8 @@ static int Render_Audio(const void* inputBuffer,
 
 int main(void)
 {
+    srand(time(NULL));
+
     // Setup window
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit())
@@ -192,17 +188,19 @@ int main(void)
     bool showOscilloscope = true;
     ImVec4 clear_color = ImVec4(0.24f, 0.35f, 0.56f, 1.00f);
 
-    // Initialise oscillator templates
-    for (int n = 0; n < numberOfShapes; n++) {
-        setOsc(&templateOscillators[n], baseFrequency, n);
-    }
+    // Initialise oscillator wavetable templates
+    makeAllTables(&templateTables, baseFrequency);
+    //for (int n = 0; n < numberOfShapes; n++) {
+    //    setOsc(&templateOscillators[n], baseFrequency, n);
+    //}
 
-    for (int n = 0; n < numberOfOscStacks; n++) {
-        WaveTableOscStack* stack = new WaveTableOscStack(&templateOscillators[0], 0);
+    for (int n = 0; n < maxOscStacks; n++) {
+        WaveTableOscStack* stack = new WaveTableOscStack();
+        (*stack).setTables(&templateTables[0]);
         oscStacks.push_back(*stack);
     }
 
-    midiPitches = initMidiPitches();
+    initMidiPitches();
 
     iota(begin(scopeIndex), end(scopeIndex), 0);
 
@@ -275,30 +273,44 @@ int main(void)
         if (showOscillators) {
             ImGui::Begin("Oscillators", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
+            ImGui::SliderInt("Osc count", &numberOfOscStacks, 1, 3, "%d");
+
             const char* waveShape[] = {"Sine", "Triangle", "Saw", "Square" };
 
             for (int n = 0; n < numberOfOscStacks; n++) {
                 ImGui::PushID(n);
 
-                ImGui::Text("Oscillator %u", n);
-                if (ImGui::Combo("Wave shape", &oscStacks[n].shape, waveShape, IM_ARRAYSIZE(waveShape))) {
-                    oscStacks[n].setShapes(&templateOscillators[oscStacks[n].shape]);
+                ImGui::Text("Osc %u", n + 1);
+                if (ImGui::Combo("Shape", &oscStacks[n].shape, waveShape, IM_ARRAYSIZE(waveShape))) {
+                    //oscStacks[n].setShapes(&templateOscillators[oscStacks[n].shape]);
+                    oscStacks[n].setTables(&templateTables[oscStacks[n].shape]);
                     pushFreqs();
                 }
-                ImGui::SliderFloat("Amplitude", &oscStacks[n].amplitude, 0.0, 1.0);
+                if (ImGui::SliderInt("Voices", &oscStacks[n].unisonVoices, 1, 8, "%d")) {
+                    oscStacks[n].setVoices(&allDetuneSemitones[oscStacks[n].unisonVoices - 1]);
+                    pushFreqs();
+                }
+                if (ImGui::SliderFloat("Detune", &oscStacks[n].unisonDetune, 0.0, 100.0)) {
+                    pushFreqs();
+                }
+
+                ImGui::SliderFloat("Amp", &oscStacks[n].amplitude, 0.0, 1.0);
 
                 ImGui::PopID();
             }
 
-            //ImGui::TextUnformatted("");
-            //ImGui::Checkbox("Retrig", &retrig);
-            //if (ImGui::SliderFloat("Detune", &detune, 0.0, 100.0)) {
-            //    detuneFactor = pow(2, (detune / 100.0) / 12.0);
-            //    double freq = midiPitches[prevNote];
-            //    oscillators[1].setFrequency(freq * detuneFactor / SAMPLE_RATE);
-            //    oscillators[2].setFrequency(freq / detuneFactor / SAMPLE_RATE);
-            //}
-            //ImGui::Text("Detune factor: %.3f", detuneFactor);
+            if (ImGui::Button("Reset phase")) {
+                for (int n = 0; n < numberOfOscStacks; n++) {
+                    oscStacks[n].resetPhases();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Randomise phase")) {
+                for (int n = 0; n < numberOfOscStacks; n++) {
+                    oscStacks[n].randomisePhases();
+                }
+            }
+
             ImGui::End();
         }
 
@@ -315,8 +327,13 @@ int main(void)
 
             if (ImGui::Begin("Oscilloscope")) { // needed otherwise will crash upon minimising
 
+                float scale = 0.0;
+                for (int n = 0; n < numberOfOscStacks; n++) {
+                    scale += (oscStacks[n].amplitude * oscStacks[n].unisonVoices);
+                }
+
                 ImPlot::SetNextPlotLimitsX(0.0, (float)SAMPLE_BUFFER_SIZE - 1.0, ImGuiCond_Always);
-                ImPlot::SetNextPlotLimitsY(-gAmplitude * 3, gAmplitude * 3, ImGuiCond_Always);
+                ImPlot::SetNextPlotLimitsY(-gAmplitude * scale, gAmplitude * scale, ImGuiCond_Always);
                 ImPlot::SetNextLineStyle(ImVec4(0, 0, 0, -1), 3.0f);
                 if (ImPlot::BeginPlot("", 0, 0, ImVec2(-1, -1), ImPlotFlags_AntiAliased, ImPlotAxisFlags_NoLabel | ImPlotAxisFlags_NoTickLabels,
                     ImPlotAxisFlags_NoLabel | ImPlotAxisFlags_NoTickLabels)) {

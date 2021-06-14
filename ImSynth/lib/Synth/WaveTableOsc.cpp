@@ -16,94 +16,168 @@
 //  You may modify and use this source code to create binary code for your own purposes, free or commercial.
 //
 
-
-// for time testing
-#include <ctime>
 #include <iostream>
 #include <vector>
-using namespace std;
-
 #include <math.h>
+
+using namespace std;
 
 #include "WaveTableOsc.h"
 
+////
+//// setSawtoothOsc
+////
+//// make set of wavetables for sawtooth oscillator
+////
+//void setOsc(WaveTableOsc *osc, float baseFreq, int waveShape) {    
 //
-// setSawtoothOsc
+//    // calc number of harmonics where the highest harmonic baseFreq and lowest alias an octave higher would meet
+//    int maxHarms = sampleRate / (3.0 * baseFreq) + 0.5;
 //
-// make set of wavetables for sawtooth oscillator
+//    // round up to nearest power of two
+//    unsigned int v = maxHarms;
+//    v--;            // so we don't go up if already a power of 2
+//    v |= v >> 1;    // roll the highest bit into all lower bits...
+//    v |= v >> 2;
+//    v |= v >> 4;
+//    v |= v >> 8;
+//    v |= v >> 16;
+//    v++;            // and increment to power of 2
+//    int tableLen = v * 2 * overSamp;  // double for the sample rate, then oversampling
 //
-void setOsc(WaveTableOsc *osc, float baseFreq, int waveShape) {    
+//    vector<myFloat> ar(tableLen), ai(tableLen); // for ifft
+//
+//    double topFreq = baseFreq * 2.0 / sampleRate;
+//    myFloat scale = 0.0;
+//    int tableIndex = 0;
+//
+//    for (; maxHarms >= 1; maxHarms >>= 1) {
+//        if (waveShape == 0) {
+//            defineSine(tableLen, ar, ai);
+//        } else if (waveShape == 1) {
+//            defineTriangle(tableLen, maxHarms, ar, ai);
+//        } else if (waveShape == 2) {
+//            defineSawtooth(tableLen, maxHarms, ar, ai);
+//        } else if (waveShape == 3) {
+//            defineSquare(tableLen, maxHarms, ar, ai);
+//        }
+//        scale = makeWaveTable(osc, tableLen, ar, ai, scale, topFreq, tableIndex);
+//        topFreq *= 2;
+//        if (tableLen > constantRatioLimit) // variable table size (constant oversampling but with minimum table size)
+//            tableLen >>= 1;
+//        tableIndex++;
+//    }
+//}
 
-    // calc number of harmonics where the highest harmonic baseFreq and lowest alias an octave higher would meet
-    int maxHarms = sampleRate / (3.0 * baseFreq) + 0.5;
+void makeAllTables(vector<vector<waveTable>>* allTables, float baseFreq) {
+    // run loop over every wavetable shape
+    for (int n = 0; n < numberOfShapes; n++) {
+        // calc number of harmonics where the highest harmonic baseFreq and lowest alias an octave higher would meet
+        int maxHarms = sampleRate / (3.0 * baseFreq) + 0.5;
 
-    // round up to nearest power of two
-    unsigned int v = maxHarms;
-    v--;            // so we don't go up if already a power of 2
-    v |= v >> 1;    // roll the highest bit into all lower bits...
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    v++;            // and increment to power of 2
-    int tableLen = v * 2 * overSamp;  // double for the sample rate, then oversampling
+        // round up to nearest power of two
+        unsigned int v = maxHarms;
+        v--;            // so we don't go up if already a power of 2
+        v |= v >> 1;    // roll the highest bit into all lower bits...
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        v++;            // and increment to power of 2
+        int tableLen = v * 2 * overSamp;  // double for the sample rate, then oversampling
 
-    vector<myFloat> ar(tableLen), ai(tableLen); // for ifft
+        vector<myFloat> ar(tableLen), ai(tableLen); // for ifft
+        double topFreq = baseFreq * 2.0 / sampleRate;
 
-    double topFreq = baseFreq * 2.0 / sampleRate;
-    myFloat scale = 0.0;
-    int tableIndex = 0;
-
-    for (; maxHarms >= 1; maxHarms >>= 1) {
-        if (waveShape == 0) {
-            defineSine(tableLen, ar, ai);
-        } else if (waveShape == 1) {
-            defineTriangle(tableLen, maxHarms, ar, ai);
-        } else if (waveShape == 2) {
-            defineSawtooth(tableLen, maxHarms, ar, ai);
-        } else if (waveShape == 3) {
-            defineSquare(tableLen, maxHarms, ar, ai);
+        for (; maxHarms >= 1; maxHarms >>= 1) {
+            if (n == 0) {
+                defineSine(tableLen, ar, ai);
+            }
+            else if (n == 1) {
+                defineTriangle(tableLen, maxHarms, ar, ai);
+            }
+            else if (n == 2) {
+                defineSawtooth(tableLen, maxHarms, ar, ai);
+            }
+            else if (n == 3) {
+                defineSquare(tableLen, maxHarms, ar, ai);
+            }
+            waveTable table = makeWaveTable(tableLen, ar, ai, topFreq);
+            (*allTables)[n].push_back(table);
+            topFreq *= 2;
+            //if (tableLen > constantRatioLimit) // variable table size (constant oversampling but with minimum table size)
+            //    tableLen >>= 1;
         }
-        scale = makeWaveTable(osc, tableLen, ar, ai, scale, topFreq, tableIndex);
-        topFreq *= 2;
-        if (tableLen > constantRatioLimit) // variable table size (constant oversampling but with minimum table size)
-            tableLen >>= 1;
-        tableIndex++;
     }
 }
+
+////
+//// if scale is 0, auto-scales
+//// returns scaling factor (0.0 if failure), and wavetable in ai array
+////
+//float makeWaveTable(WaveTableOsc *osc, int len, vector<myFloat>& ar, vector<myFloat>& ai, myFloat scale, double topFreq, int tableIndex)
+//{
+//    fft(len, ar, ai);
+//    
+//    myFloat max = 0;
+//
+//    if (scale == 0.0) {
+//        // calc normal
+//        for (int idx = 0; idx < len; idx++) {
+//            myFloat temp = fabs(ai[idx]);
+//            if (max < temp) {
+//                max = temp;
+//            }
+//        }
+//        scale = 1.0 / max * .999;        
+//    }
+//
+//    // normalize
+//    vector<float> wave(len);
+//    for (int idx = 0; idx < len; idx++)
+//        wave[idx] = ai[idx] * scale;
+//        
+//    if (osc->addWaveTable(len, wave, topFreq, tableIndex))
+//        scale = 0.0;
+//    
+//    return scale;
+//}
 
 //
 // if scale is 0, auto-scales
 // returns scaling factor (0.0 if failure), and wavetable in ai array
 //
-float makeWaveTable(WaveTableOsc *osc, int len, vector<myFloat>& ar, vector<myFloat>& ai, myFloat scale, double topFreq, int tableIndex)
+waveTable makeWaveTable(int len, vector<myFloat>& ar, vector<myFloat>& ai, double topFreq)
 {
-    fft(len, ar, ai);
-    
-    myFloat max = 0;
+    waveTable table;
 
-    if (scale == 0.0) {
-        // calc normal
-        for (int idx = 0; idx < len; idx++) {
-            myFloat temp = fabs(ai[idx]);
-            if (max < temp) {
-                max = temp;
-            }
+    fft(len, ar, ai);
+
+    myFloat max = 0.0;
+    float scale = 0.0;
+
+    for (int idx = 0; idx < len; idx++) {
+        myFloat temp = fabs(ai[idx]);
+        if (max < temp) {
+            max = temp;
         }
-        scale = 1.0 / max * .999;        
     }
 
-    // normalize
+    scale = 1.0 / max * .999;
+
+    // normalize and cast to a float vector
     vector<float> wave(len);
     for (int idx = 0; idx < len; idx++)
         wave[idx] = ai[idx] * scale;
-        
-    if (osc->addWaveTable(len, wave, topFreq, tableIndex))
-        scale = 0.0;
-    
-    return scale;
-}
 
+    wave.push_back(wave.front());
+
+    table.topFreq = topFreq;
+    table.waveTableLen = len;
+    table.waveTable_ = wave;
+
+    return table;
+}
 
 //
 // fft
