@@ -1,4 +1,4 @@
-#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
+//#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
 
 #include <stdio.h>
 #include <math.h>
@@ -22,7 +22,6 @@
 
 #include "lib/MIDI.h"
 #include "lib/Synth/WaveTableOsc.h"
-#include "lib/Synth/detune.h"
 
 using namespace std;
 
@@ -49,15 +48,15 @@ int numberOfOscStacks = 1;
 
 vector<WaveTableOscStack> oscStacks;
 
-float detune = 0.0;
-float detuneFactor = 1.0;
+//float detune = 0.0;
+//float detuneFactor = 1.0;
 
 bool soundOn = false;
 float gAmplitude = 0.02f;
 unsigned int audioOutChannels = 2;
 
 bool holdNote = false;
-bool retrig = false;
+//bool retrig = false;
 bool keyPressed[128] = { 0 };
 int prevNoteActive = 128; // 128 = None
 int prevNote = 128;
@@ -190,10 +189,8 @@ int main(void)
 
     // Initialise oscillator wavetable templates
     makeAllTables(&templateTables, baseFrequency);
-    //for (int n = 0; n < numberOfShapes; n++) {
-    //    setOsc(&templateOscillators[n], baseFrequency, n);
-    //}
 
+    // Initialise oscillator stacks
     for (int n = 0; n < maxOscStacks; n++) {
         WaveTableOscStack* stack = new WaveTableOscStack();
         (*stack).setTables(&templateTables[0]);
@@ -273,7 +270,9 @@ int main(void)
         if (showOscillators) {
             ImGui::Begin("Oscillators", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
-            ImGui::SliderInt("Osc count", &numberOfOscStacks, 1, 3, "%d");
+            if (ImGui::SliderInt("Osc count", &numberOfOscStacks, 1, 3, "%d")) {
+                pushFreqs();
+            }
 
             const char* waveShape[] = {"Sine", "Triangle", "Saw", "Square" };
 
@@ -282,13 +281,11 @@ int main(void)
 
                 ImGui::Text("Osc %u", n + 1);
                 if (ImGui::Combo("Shape", &oscStacks[n].shape, waveShape, IM_ARRAYSIZE(waveShape))) {
-                    //oscStacks[n].setShapes(&templateOscillators[oscStacks[n].shape]);
                     oscStacks[n].setTables(&templateTables[oscStacks[n].shape]);
                     pushFreqs();
                 }
-                if (ImGui::SliderInt("Voices", &oscStacks[n].unisonVoices, 1, 8, "%d")) {
-                    oscStacks[n].setVoices(&allDetuneSemitones[oscStacks[n].unisonVoices - 1]);
-                    pushFreqs();
+                if (ImGui::SliderInt("Voices", &oscStacks[n].voices, 1, 8, "%d")) {
+                    pushFreqs(); // because the detune frequencies have changed
                 }
                 if (ImGui::SliderFloat("Detune", &oscStacks[n].unisonDetune, 0.0, 100.0)) {
                     pushFreqs();
@@ -329,7 +326,7 @@ int main(void)
 
                 float scale = 0.0;
                 for (int n = 0; n < numberOfOscStacks; n++) {
-                    scale += (oscStacks[n].amplitude * oscStacks[n].unisonVoices);
+                    scale += (oscStacks[n].amplitude * oscStacks[n].voices);
                 }
 
                 ImPlot::SetNextPlotLimitsX(0.0, (float)SAMPLE_BUFFER_SIZE - 1.0, ImGuiCond_Always);

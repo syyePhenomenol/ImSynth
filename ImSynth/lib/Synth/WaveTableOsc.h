@@ -47,7 +47,7 @@ using namespace std;
 #define myFloat double      /* float or double, to set the resolution of the FFT, etc. (the resulting wavetables are always float) */
 
 #define numberOfShapes (4) // total number of wave shapes implemented
-#define maxUnisonVoices (8)  // maximum number of oscillators per stack
+#define maxVoices (8)  // maximum number of oscillators per stack
 
 struct waveTable {
     double topFreq;
@@ -78,6 +78,7 @@ public:
         while ((mPhaseInc >= mWaveTables[curWaveTable].topFreq) && (curWaveTable < (mNumWaveTables - 1))) {
             ++curWaveTable;
         }
+
         mCurWaveTable = curWaveTable;
     }
 
@@ -117,7 +118,12 @@ public:
     // GetOutput: Returns the current oscillator output
     //
     float getOutput(void) {
+        // important to define pointer instead of new waveTable for performance!
         waveTable* thisTable = &mWaveTables[mCurWaveTable];
+
+        while (thisTable->waveTable_.size() != 4097 || thisTable->waveTableLen != 4096) {
+            return 0.0;
+        }
 
         // linear interpolation
         float temp = mPhasor * thisTable->waveTableLen;
@@ -193,7 +199,7 @@ public:
 
     void setTables(vector<waveTable>* tables) {
         mWaveTables = *tables;
-        mNumWaveTables = tables->size();
+        mNumWaveTables = mWaveTables.size();
     }
 
     vector<waveTable>* getTables() {
@@ -225,7 +231,7 @@ public:
     //}
 
     WaveTableOscStack() {
-        for (int n = 0; n < maxUnisonVoices; n++) {
+        for (int n = 0; n < maxVoices; n++) {
             WaveTableOsc newOsc;
             mOscillators.push_back(newOsc);
         }
@@ -239,7 +245,7 @@ public:
         float out = 0.0;
 
         if (stackOn) {
-            for (int n = 0; n < unisonVoices; n++) {
+            for (int n = 0; n < voices; n++) {
                 out += mOscillators[n].process();
             }
         }
@@ -257,46 +263,46 @@ public:
         // need to add in detune stuff
         // implement octave/semitone
 
-        for (int n = 0; n < unisonVoices; n++) {
-            float finalDetuneMultiplier = pow(2, (unisonDetune / 100.0) * detuneSemitones[n] / 12.0);
+        for (int n = 0; n < voices; n++) {
+            float finalDetuneMultiplier = pow(2, (unisonDetune / 100.0) * allDetuneSemitones[voices - 1][n] / 12.0);
             mOscillators[n].setFrequency(freq * finalDetuneMultiplier);
             //cout << detunedFreq << endl;
         }
     }
 
     void setTables(vector<waveTable>* tables) {
-        for (int n = 0; n < unisonVoices; n++) {
+        for (int n = 0; n < maxVoices; n++) {
             mOscillators[n].setTables(tables);
         }
         //stackShape = shape;
     }
 
-    void setShapes(WaveTableOsc* osc) {
-        for (int n = 0; n < unisonVoices; n++) {
-            mOscillators[n] = *osc;
-        }
-        //stackShape = shape;
-    }
+    //void setShapes(WaveTableOsc* osc) {
+    //    for (int n = 0; n < voices; n++) {
+    //        mOscillators[n] = *osc;
+    //    }
+    //    //stackShape = shape;
+    //}
 
     // copy first oscillator's tables into every other oscillator required
-    void setVoices (vector<double>* detune) {
-        vector<waveTable>* tables = mOscillators.front().getTables();
-        for (int n = 1; n < unisonVoices; n++) {
-            mOscillators[n].setTables(tables);
-        }
+    //void updateDetune () {
+    //    //vector<waveTable>* tables = mOscillators.front().getTables();
+    //    //for (int n = 1; n < voices; n++) {
+    //    //    mOscillators[n].setTables(tables);
+    //    //}
 
-        // update detuneMultipliers
-        detuneSemitones = *detune;
-    }
+    //    // update detuneMultipliers
+    //    detuneSemitones = allDetuneSemitones[voices - 1];
+    //}
 
     void resetPhases() {
-        for (int n = 1; n < unisonVoices; n++) {
+        for (int n = 0; n < maxVoices; n++) {
             mOscillators[n].setPhase(0.0);
         }
     }
 
     void randomisePhases() {
-        for (int n = 1; n < unisonVoices; n++) {
+        for (int n = 0; n < maxVoices; n++) {
             mOscillators[n].setPhase(randomFloat(0.0, 1.0));
         }
     }
@@ -304,7 +310,7 @@ public:
     // parameters that can be directly edited by external processes
     bool    stackOn = true;
     int     shape = 0;
-    int     unisonVoices = 1;
+    int     voices = 1;
     float   unisonSpread = 100.0;
     float   unisonDetune = 0.0;
     int     pan = 0;
@@ -315,6 +321,18 @@ protected:
     vector<double> detuneSemitones{ 0.0 }; // updated when number of voices changes
     double  freq = 0.0;
     int     octave = 0;
+
+    // spread of each voice (with max detune) in semitones from central note
+    vector<vector<double>> allDetuneSemitones = {
+    {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+    {-1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+    {-1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+    {-1.0, -1.0 / 3.0, 1.0 / 3.0, 1.0, 0.0, 0.0, 0.0, 0.0},
+    {-1.0, -0.5, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0},
+    {-1.0, -0.6, -0.2, 0.2, 0.6, 1.0, 0.0, 0.0},
+    {-1.0, -2.0 / 3.0, -1.0 / 3.0, 0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0, 0.0},
+    {-1.0, -1.0 + 2.0 / 7.0, -1.0 + 4.0 / 7.0, -1.0 + 6.0 / 7.0, 1.0 - 6.0 / 7.0, 1.0 - 4.0 / 7.0, 1.0 - 2.0 / 7.0, 1.0}
+    };
 };
 
 void fft(int N, vector<myFloat>& ar, vector<myFloat>& ai);
