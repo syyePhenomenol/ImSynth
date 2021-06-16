@@ -19,8 +19,52 @@ bool TestPianoBoardFunct(void* UserData, int Msg, int Key, float Vel) {
 */
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "MIDI.h"
 
+#include <iostream>
+#include <map>
 
+using namespace std;
+
+int keyboardOctave = 4;
+int keyboardBaseKey = 96;
+
+map <char, int> keyCharToKey {
+	{'Z', 0},
+	{'S', 1},
+	{'X', 2},
+	{'D', 3},
+	{'C', 4},
+	{'V', 5},
+	{'G', 6},
+	{'B', 7},
+	{'H', 8},
+	{'N', 9},
+	{'J', 10},
+	{'M', 11},
+	{',', 12},
+	{'L', 13},
+	{'.', 14},
+	{';', 15},
+	{'/', 16},
+	{'Q', 12},
+	{'2', 13},
+	{'W', 14},
+	{'3', 15},
+	{'E', 16},
+	{'R', 17},
+	{'5', 18},
+	{'T', 19},
+	{'6', 20},
+	{'Y', 21},
+	{'7', 22},
+	{'U', 23},
+	{'I', 24},
+	{'9', 25},
+	{'O', 26},
+	{'0', 27},
+	{'P', 28}
+};
 
 enum ImGuiPianoKeyboardMsg {
 	NoteGetStatus,
@@ -42,7 +86,7 @@ struct ImGuiPianoStyles {
 	float NoteDarkWidth  = 2.0f / 3.0f;	// dark note scale w
 };
 
-void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevNoteActive, int BeginOctaveNote, int EndOctaveNote, ImGuiPianoKeyboardProc Callback, void* UserData, ImGuiPianoStyles* Style = nullptr) {
+void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevActiveNote, int BeginOctaveNote, int EndOctaveNote, ImGuiPianoKeyboardProc Callback, void* UserData, ImGuiPianoStyles* Style = nullptr) {
 	// const
 	static int NoteIsDark[12] = { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0 };
 	static int NoteLightNumber[12] = { 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6, 7 };
@@ -161,14 +205,30 @@ void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevNoteActive, i
 		draw_list->AddRect(			NoteRect.Min, NoteRect.Max, Style->Colors[4], 0.0f);
 	}
 
-	// mouse note click
-	if (*PrevNoteActive != NoteMouseCollision) {
-		Callback(UserData, NoteOff, *PrevNoteActive, 0.0f);
-		*PrevNoteActive = 128;
+	static int prevMouseNote = midiNone;
+
+	// mouse input
+	if (prevMouseNote != NoteMouseCollision) {
+		Callback(UserData, NoteOff, prevMouseNote, 0.0f);
+		prevMouseNote = 128;
 
 		if (held && NoteMouseCollision >= 0) {
 			Callback(UserData, NoteOn, NoteMouseCollision, NoteMouseVel);
-			*PrevNoteActive = NoteMouseCollision;
+			prevMouseNote = NoteMouseCollision;
+		}
+	}
+
+	// key input
+	for (auto & key : keyCharToKey)
+	{
+		char thisChar = key.first;
+		int thisKey = key.second + keyboardOctave * 12;
+
+		if (ImGui::IsKeyPressed(thisChar)) {
+			Callback(UserData, NoteOn, thisKey, 0.75);
+		}
+		if (ImGui::IsKeyReleased(thisChar)) {
+			Callback(UserData, NoteOff, thisKey, 0.75);
 		}
 	}
 }

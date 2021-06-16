@@ -5,6 +5,11 @@
 
 using namespace std;
 
+#define noOfMIDINotes (128)
+#define midiNone (128)
+
+#define maxPolyphony (4) // maximum number of notes at once
+
 vector<string> MIDI_number_to_name
 {
 	"C-1",
@@ -287,14 +292,22 @@ unordered_map<string, int> MIDI_name_to_number
 	{"E9", 124},
 	{"F9", 125},
 	{"F#9", 126},
-	{"G9", 127}
+	{"G9", 127},
+	{"None", midiNone}
 };
 
-vector<float> midiPitches(128, 0.0);
+// after initialisation, midiPitches[midiNone] is 0.0
+vector<float> midiPitches(noOfMIDINotes + 1, 0.0);
 
 void initMidiPitches()
 {
-	for (int n = 0; n < 128; n++) {
+	for (int n = 0; n < noOfMIDINotes; n++) {
 		midiPitches[n] = 440 * pow(2, (float(n) - 69.0) / 12.0);
 	}
+}
+
+static vector<int> keyBuffer(maxPolyphony, midiNone);
+
+int findKeyInBuffer(int key) {
+	return find(keyBuffer.begin(), keyBuffer.end(), key) - keyBuffer.begin();
 }

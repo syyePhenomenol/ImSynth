@@ -21,13 +21,16 @@
 #include "portaudio.h"
 
 #include "lib/MIDI.h"
-#include "lib/Synth/WaveTableOsc.h"
+#include "lib/Synth/WaveTableOscPoly.h"
+
+//temp
+#include <map>
 
 using namespace std;
 
 static void glfw_error_callback(int error, const char* description)
 {
-    fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+    std::fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
 #define SAMPLE_RATE   (44100)
@@ -39,8 +42,6 @@ static void glfw_error_callback(int error, const char* description)
 
 #define baseFrequency (20)  /* starting frequency of first table */
 
-//vector<WaveTableOsc> templateOscillators(numberOfShapes);
-
 vector<vector<waveTable>> templateTables(numberOfShapes);
 
 int maxOscStacks = 3;
@@ -48,53 +49,101 @@ int numberOfOscStacks = 1;
 
 vector<WaveTableOscStack> oscStacks;
 
-//float detune = 0.0;
-//float detuneFactor = 1.0;
-
-bool soundOn = false;
+bool soundOn = true;
 float gAmplitude = 0.02f;
 unsigned int audioOutChannels = 2;
 
 bool holdNote = false;
 //bool retrig = false;
-bool keyPressed[128] = { 0 };
-int prevNoteActive = 128; // 128 = None
-int prevNote = 128;
+bool keyPressed[noOfMIDINotes] = { 0 };
+int prevNoteActive = midiNone;
+int prevNote = midiNone;
 
-// Force a push of frequencies (ie. after oscillators have been reset again)
-void pushFreqs()
+//// Force a push of frequencies (ie. after oscillators have been reset again)
+//void pushFreqs()
+//{
+//    for (int n = 0; n < noOfMIDINotes; n++) {
+//        if (keyPressed[n] || holdNote) {
+//            double freq = midiPitches[prevNote];
+//            //vector<double> freqs(maxPolyphony);
+//            //freqs[0] = freq / SAMPLE_RATE;
+//
+//            for (int i = 0; i < numberOfOscStacks; i++) {
+//                oscStacks[i].setFrequencies(freq / SAMPLE_RATE, 0);
+//            }
+//
+//            break;
+//        }
+//    }
+//}
+
+//bool pianoCallback(void* UserData, int Msg, int Key, float Vel)
+//{
+//    if ((Key > 108) || (Key < 21)) return false; // midi max keys
+//    if (Msg == NoteGetStatus) return keyPressed[Key];
+//    //if (Msg == NoteOn) { KeyPressed[Key] = true; Send_Midi_NoteOn(Key, Vel * 127); }
+//    //if (Msg == NoteOff) { KeyPressed[Key] = false; Send_Midi_NoteOff(Key, Vel * 127); }
+//    if (Msg == NoteOn) {
+//        for (int n = 0; n < noOfMIDINotes; n++) {
+//            keyPressed[n] = false;
+//        }
+//        keyPressed[Key] = true; soundOn = true;
+//        double freq = midiPitches[Key];
+//        for (int n = 0; n < numberOfOscStacks; n++) {
+//            //oscStacks[n].setFrequencies(freq / SAMPLE_RATE);
+//            vector<double> freqs(maxPolyphony);
+//            freqs[0] = freq / SAMPLE_RATE;
+//            //freqs[1] = freqs[0] * 2;
+//            oscStacks[n].setAllFrequencies(freqs);
+//        }
+//    }
+//    if (Msg == NoteOff) {
+//        keyPressed[Key] = false;
+//        if (holdNote) {
+//            soundOn = true;
+//        }
+//        else {
+//            soundOn = false;
+//        }
+//    }
+//    return false;
+//}
+
+void pushFreq(int key, int noteIndex)
 {
-    for (int n = 0; n < 128; n++) {
-        if (keyPressed[n] || holdNote) {
-            double freq = midiPitches[prevNote];
-            for (int i = 0; i < numberOfOscStacks; i++) {
-                oscStacks[i].setFrequencies(freq / SAMPLE_RATE);
-            }
-            break;
-        }
+    for (int i = 0; i < numberOfOscStacks; i++) {
+        oscStacks[i].setFrequencies(midiPitches[key] / SAMPLE_RATE, noteIndex);
+    }
+}
+
+void pushAllFreqs()
+{
+    for (int i = 0; i < keyBuffer.size(); i++) {
+        pushFreq(keyBuffer[i], i);
     }
 }
 
 bool pianoCallback(void* UserData, int Msg, int Key, float Vel)
 {
-    if ((Key >= 128) || (Key < 0)) return false; // midi max keys
-    if (Msg == NoteGetStatus) return keyPressed[Key];
-    //if (Msg == NoteOn) { KeyPressed[Key] = true; Send_Midi_NoteOn(Key, Vel * 127); }
-    //if (Msg == NoteOff) { KeyPressed[Key] = false; Send_Midi_NoteOff(Key, Vel * 127); }
+    if ((Key > 108) || (Key < 21)) return false; // midi max keys
+    //if (Msg == NoteGetStatus) return keyPressed[Key];
     if (Msg == NoteOn) {
-        keyPressed[Key] = true; soundOn = true;
-        double freq = midiPitches[Key];
-        for (int n = 0; n < numberOfOscStacks; n++) {
-            oscStacks[n].setFrequencies(freq / SAMPLE_RATE);
+        // if this key is not in the buffer
+        if (findKeyInBuffer(Key) == maxPolyphony) {
+            // if there is space in the buffer
+            int slot = findKeyInBuffer(midiNone);
+            if (slot != maxPolyphony) {
+                pushFreq(Key, slot);
+                keyBuffer[slot] = Key;
+            }
         }
     }
     if (Msg == NoteOff) {
-        keyPressed[Key] = false;
-        if (holdNote) {
-            soundOn = true;
-        }
-        else {
-            soundOn = false;
+        // if the key is in the buffer
+        int slot = findKeyInBuffer(Key);
+        if (slot != maxPolyphony) {
+            pushFreq(midiNone, slot);
+            keyBuffer[slot] = midiNone;
         }
     }
     return false;
@@ -139,6 +188,8 @@ static int Render_Audio(const void* inputBuffer,
 
 int main(void)
 {
+    cout << keyBuffer.size() << endl;
+
     srand(time(NULL));
 
     // Setup window
@@ -161,7 +212,7 @@ int main(void)
     // Initialize OpenGL loader
     bool OpenGLerr = gl3wInit() != 0;
     if (OpenGLerr) {
-        fprintf(stderr, "Failed to initialize OpenGL loader!\n");
+        std::fprintf(stderr, "Failed to initialize OpenGL loader!\n");
         return 1;
     }
 
@@ -193,7 +244,7 @@ int main(void)
     // Initialise oscillator stacks
     for (int n = 0; n < maxOscStacks; n++) {
         WaveTableOscStack* stack = new WaveTableOscStack();
-        (*stack).setTables(&templateTables[0]);
+        (*stack).setAllTables(&templateTables[0]);
         oscStacks.push_back(*stack);
     }
 
@@ -210,7 +261,7 @@ int main(void)
 
     outputParameters.device = Pa_GetDefaultOutputDevice(); /* default output device */
     if (outputParameters.device == paNoDevice) {
-        fprintf(stderr, "Error: No default output device.\n");
+        std::fprintf(stderr, "Error: No default output device.\n");
         goto error;
     }
 
@@ -235,13 +286,13 @@ int main(void)
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-        if (prevNoteActive != 128) {
-            prevNote = prevNoteActive;
-        }
+        //if (prevNoteActive != midiNone) {
+        //    prevNote = prevNoteActive;
+        //}
 
-        if (!holdNote && prevNoteActive == 128) {
-            soundOn = false;
-        }
+        //if (!holdNote && prevNoteActive == midiNone) {
+        //    soundOn = false;
+        //}
 
         // Poll and handle events (inputs, window resize, etc.)
         // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
@@ -271,7 +322,7 @@ int main(void)
             ImGui::Begin("Oscillators", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
             if (ImGui::SliderInt("Osc count", &numberOfOscStacks, 1, 3, "%d")) {
-                pushFreqs();
+                pushAllFreqs();
             }
 
             const char* waveShape[] = {"Sine", "Triangle", "Saw", "Square" };
@@ -281,14 +332,14 @@ int main(void)
 
                 ImGui::Text("Osc %u", n + 1);
                 if (ImGui::Combo("Shape", &oscStacks[n].shape, waveShape, IM_ARRAYSIZE(waveShape))) {
-                    oscStacks[n].setTables(&templateTables[oscStacks[n].shape]);
-                    pushFreqs();
+                    oscStacks[n].setAllTables(&templateTables[oscStacks[n].shape]);
+                    //pushAllFreqs();
                 }
                 if (ImGui::SliderInt("Voices", &oscStacks[n].voices, 1, 8, "%d")) {
-                    pushFreqs(); // because the detune frequencies have changed
+                    pushAllFreqs(); // because the detune frequencies have changed
                 }
                 if (ImGui::SliderFloat("Detune", &oscStacks[n].unisonDetune, 0.0, 100.0)) {
-                    pushFreqs();
+                    pushAllFreqs();
                 }
 
                 ImGui::SliderFloat("Amp", &oscStacks[n].amplitude, 0.0, 1.0);
@@ -298,13 +349,13 @@ int main(void)
 
             if (ImGui::Button("Reset phase")) {
                 for (int n = 0; n < numberOfOscStacks; n++) {
-                    oscStacks[n].resetPhases();
+                    oscStacks[n].resetAllPhases();
                 }
             }
             ImGui::SameLine();
             if (ImGui::Button("Randomise phase")) {
                 for (int n = 0; n < numberOfOscStacks; n++) {
-                    oscStacks[n].randomisePhases();
+                    oscStacks[n].randomiseAllPhases();
                 }
             }
 
@@ -317,6 +368,7 @@ int main(void)
             ImGui_PianoKeyboard("PianoTest", ImVec2(1060, 120), &prevNoteActive, 21, 108, pianoCallback, nullptr, nullptr);
 
             ImGui::End();
+        } else {
         }
 
         if (showOscilloscope) {
@@ -349,8 +401,10 @@ int main(void)
             ImGui::SliderFloat("Amplitude", &gAmplitude, 0.0, 0.1);
             if (holdNote) {
                 ImGui::Text("Active note: %s", &(MIDI_number_to_name[prevNote])[0]);
-            } else {
+            } else if (soundOn) {
                 ImGui::Text("Active note: %s", &(MIDI_number_to_name[prevNoteActive])[0]);
+            } else {
+                ImGui::Text("Active note: %s", &(MIDI_number_to_name[128])[0]);
             }
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
@@ -386,8 +440,8 @@ int main(void)
 
     error:
         Pa_Terminate();
-        fprintf(stderr, "An error occurred while using the portaudio stream\n");
-        fprintf(stderr, "Error number: %d\n", err);
-        fprintf(stderr, "Error message: %s\n", Pa_GetErrorText(err));
+        std::fprintf(stderr, "An error occurred while using the portaudio stream\n");
+        std::fprintf(stderr, "Error number: %d\n", err);
+        std::fprintf(stderr, "Error message: %s\n", Pa_GetErrorText(err));
         return err;
 }
