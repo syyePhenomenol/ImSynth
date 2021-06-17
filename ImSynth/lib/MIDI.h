@@ -8,7 +8,7 @@ using namespace std;
 #define noOfMIDINotes (128)
 #define midiNone (128)
 
-#define maxPolyphony (4) // maximum number of notes at once
+#define maxPolyphony (8) // maximum number of notes at once
 
 vector<string> MIDI_number_to_name
 {

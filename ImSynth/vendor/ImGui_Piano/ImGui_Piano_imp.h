@@ -67,12 +67,14 @@ map <char, int> keyCharToKey {
 };
 
 enum ImGuiPianoKeyboardMsg {
-	NoteGetStatus,
+	//NoteGetStatus,
 	NoteOn,
 	NoteOff,
 };
 
 using ImGuiPianoKeyboardProc = bool (*)(void* UserData, int Msg, int Key, float Vel);
+
+using freqHandler = void (*)(int Key, int KeyIndex);
 
 struct ImGuiPianoStyles {
 	ImU32 Colors[5]{
@@ -86,7 +88,33 @@ struct ImGuiPianoStyles {
 	float NoteDarkWidth  = 2.0f / 3.0f;	// dark note scale w
 };
 
-void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevActiveNote, int BeginOctaveNote, int EndOctaveNote, ImGuiPianoKeyboardProc Callback, void* UserData, ImGuiPianoStyles* Style = nullptr) {
+bool pianoCallback(freqHandler Callback, int Msg, int Key, float Vel)
+{
+	if ((Key > 108) || (Key < 21)) return false; // midi max keys
+	//if (Msg == NoteGetStatus) return keyPressed[Key];
+	if (Msg == NoteOn) {
+		// if this key is not in the buffer
+		if (findKeyInBuffer(Key) == maxPolyphony) {
+			// if there is space in the buffer
+			int slot = findKeyInBuffer(midiNone);
+			if (slot != maxPolyphony) {
+				Callback(Key, slot);
+				keyBuffer[slot] = Key;
+			}
+		}
+	}
+	if (Msg == NoteOff) {
+		// if the key is in the buffer
+		int slot = findKeyInBuffer(Key);
+		if (slot != maxPolyphony) {
+			Callback(midiNone, slot);
+			keyBuffer[slot] = midiNone;
+		}
+	}
+	return false;
+}
+
+void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevActiveNote, int BeginOctaveNote, int EndOctaveNote, freqHandler pushFreqs, void* UserData, ImGuiPianoStyles* Style = nullptr) {
 	// const
 	static int NoteIsDark[12] = { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0 };
 	static int NoteLightNumber[12] = { 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6, 7 };
@@ -97,7 +125,7 @@ void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevActiveNote, i
 	if (NoteIsDark[EndOctaveNote % 12] > 0) EndOctaveNote--;
 
 	// bad range
-	if (!IDName || !Callback || BeginOctaveNote < 0 || EndOctaveNote < 0 || EndOctaveNote <= BeginOctaveNote) return;
+	if (!IDName || !pushFreqs || BeginOctaveNote < 0 || EndOctaveNote < 0 || EndOctaveNote <= BeginOctaveNote) return;
 
 	// style
 	static ImGuiPianoStyles ColorsBase;
@@ -105,7 +133,7 @@ void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevActiveNote, i
 
 	ImGuiWindow* window = ImGui::GetCurrentWindow();
 	if (window->SkipItems) return;
-	
+
 	const ImGuiID id = window->GetID(IDName);
 
 	ImDrawList* draw_list = window->DrawList;
@@ -116,12 +144,12 @@ void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevActiveNote, i
 	// sizes
 	int CountNotesAllign7 = (EndOctaveNote / 12 - BeginOctaveNote / 12) * 7 + NoteLightNumber[EndOctaveNote % 12] - (NoteLightNumber[BeginOctaveNote % 12] - 1);
 
-	float NoteHeight	= Size.y;
-	float NoteWidth		= Size.x / (float)CountNotesAllign7;
+	float NoteHeight = Size.y;
+	float NoteWidth = Size.x / (float)CountNotesAllign7;
 
-	float NoteHeight2	= NoteHeight * Style->NoteDarkHeight;
-	float NoteWidth2	= NoteWidth * Style->NoteDarkWidth;
-	
+	float NoteHeight2 = NoteHeight * Style->NoteDarkHeight;
+	float NoteWidth2 = NoteWidth * Style->NoteDarkWidth;
+
 	// minimal size draw
 	if (NoteHeight < 5.0 || NoteWidth < 3.0) return;
 
@@ -146,28 +174,28 @@ void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevActiveNote, i
 	float OffsetY = bb.Min.y;
 	float OffsetY2 = OffsetY + NoteHeight;
 	for (int RealNum = BeginOctaveNote; RealNum <= EndOctaveNote; RealNum++) {
-		int Octave	= RealNum / 12;
-		int i		= RealNum % 12;
+		int Octave = RealNum / 12;
+		int i = RealNum % 12;
 
 		if (NoteIsDark[i] > 0) continue;
-		
-		ImRect NoteRect( 
-			round(OffsetX), 
-			OffsetY, 
-			round(OffsetX + NoteWidth), 
-			OffsetY2 
+
+		ImRect NoteRect(
+			round(OffsetX),
+			OffsetY,
+			round(OffsetX + NoteWidth),
+			OffsetY2
 		);
 
 		if (held && NoteRect.Contains(MousePos)) {
-			NoteMouseCollision	= RealNum;
-			NoteMouseVel		= (MousePos.y - NoteRect.Min.y) / NoteHeight;
+			NoteMouseCollision = RealNum;
+			NoteMouseVel = (MousePos.y - NoteRect.Min.y) / NoteHeight;
 		}
 
-		bool isActive = Callback(UserData, NoteGetStatus, RealNum, 0.0f);
-		
-		draw_list->AddRectFilled(	NoteRect.Min, NoteRect.Max, Style->Colors[isActive ? 2 : 0], 0.0f);
+		//bool isActive = Callback(UserData, NoteGetStatus, RealNum, 0.0f);
 
-		draw_list->AddRect(			NoteRect.Min, NoteRect.Max, Style->Colors[4], 0.0f);
+		draw_list->AddRectFilled(NoteRect.Min, NoteRect.Max, Style->Colors[(findKeyInBuffer(RealNum) != maxPolyphony) ? 2 : 0], 0.0f);
+
+		draw_list->AddRect(NoteRect.Min, NoteRect.Max, Style->Colors[4], 0.0f);
 
 		OffsetX += NoteWidth;
 	}
@@ -177,58 +205,76 @@ void ImGui_PianoKeyboard(const char* IDName, ImVec2 Size, int* PrevActiveNote, i
 	OffsetY = bb.Min.y;
 	OffsetY2 = OffsetY + NoteHeight2;
 	for (int RealNum = BeginOctaveNote; RealNum <= EndOctaveNote; RealNum++) {
-		int Octave	= RealNum / 12;
-		int i		= RealNum % 12;
+		int Octave = RealNum / 12;
+		int i = RealNum % 12;
 
-		if (NoteIsDark[i] == 0)  {
+		if (NoteIsDark[i] == 0) {
 			OffsetX += NoteWidth;
 			continue;
 		}
-		
+
 		float OffsetDark = NoteDarkOffset[i] * NoteWidth2;
 		ImRect NoteRect(
-			round(OffsetX + OffsetDark), 
-			OffsetY, 
+			round(OffsetX + OffsetDark),
+			OffsetY,
 			round(OffsetX + NoteWidth2 + OffsetDark),
 			OffsetY2
 		);
 
 		if (held && NoteRect.Contains(MousePos)) {
-			NoteMouseCollision	= RealNum;
-			NoteMouseVel		= (MousePos.y - NoteRect.Min.y) / NoteHeight2;
+			NoteMouseCollision = RealNum;
+			NoteMouseVel = (MousePos.y - NoteRect.Min.y) / NoteHeight2;
 		}
 
-		bool isActive = Callback(UserData, NoteGetStatus, RealNum, 0.0f);
+		//bool isActive = Callback(UserData, NoteGetStatus, RealNum, 0.0f);
 
-		draw_list->AddRectFilled(	NoteRect.Min, NoteRect.Max, Style->Colors[isActive ? 3 : 1], 0.0f);
+		draw_list->AddRectFilled(NoteRect.Min, NoteRect.Max, Style->Colors[(findKeyInBuffer(RealNum) != maxPolyphony) ? 3 : 1], 0.0f);
 
-		draw_list->AddRect(			NoteRect.Min, NoteRect.Max, Style->Colors[4], 0.0f);
+		draw_list->AddRect(NoteRect.Min, NoteRect.Max, Style->Colors[4], 0.0f);
 	}
 
 	static int prevMouseNote = midiNone;
 
 	// mouse input
 	if (prevMouseNote != NoteMouseCollision) {
-		Callback(UserData, NoteOff, prevMouseNote, 0.0f);
+		pianoCallback(pushFreqs, NoteOff, prevMouseNote, 0.0f);
 		prevMouseNote = 128;
 
 		if (held && NoteMouseCollision >= 0) {
-			Callback(UserData, NoteOn, NoteMouseCollision, NoteMouseVel);
+			pianoCallback(pushFreqs, NoteOn, NoteMouseCollision, NoteMouseVel);
 			prevMouseNote = NoteMouseCollision;
 		}
 	}
 
-	// key input
-	for (auto & key : keyCharToKey)
+	// key input - playing the piano keyboard
+	for (auto& key : keyCharToKey)
 	{
 		char thisChar = key.first;
 		int thisKey = key.second + keyboardOctave * 12;
 
 		if (ImGui::IsKeyPressed(thisChar)) {
-			Callback(UserData, NoteOn, thisKey, 0.75);
+			pianoCallback(pushFreqs, NoteOn, thisKey, 0.75);
 		}
 		if (ImGui::IsKeyReleased(thisChar)) {
-			Callback(UserData, NoteOff, thisKey, 0.75);
+			pianoCallback(pushFreqs, NoteOff, thisKey, 0.75);
 		}
 	}
+	
+	// key input - octave control
+	if (ImGui::IsKeyPressed('=') && keyboardOctave < 8) {
+		for (int n = 0; n < maxPolyphony; n++) {
+			pushFreqs(midiNone, n);
+			keyBuffer[n] = midiNone;
+		}
+		keyboardOctave++;
+	} else if (ImGui::IsKeyPressed('-') && keyboardOctave > 0) {
+		for (int n = 0; n < maxPolyphony; n++) {
+			pushFreqs(midiNone, n);
+			keyBuffer[n] = midiNone;
+		}
+		keyboardOctave--;
+	}
+
+	/*ImGuiIO &io = ImGui::GetIO();
+	ImGui::Text("Keys down:");          for (int i = 0; i < IM_ARRAYSIZE(io.KeysDown); i++) if (ImGui::IsKeyDown(i)) { ImGui::SameLine(); ImGui::Text("%d (0x%X) (%.02f secs)", i, i, io.KeysDownDuration[i]); }*/
 }

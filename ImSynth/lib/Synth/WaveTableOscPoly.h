@@ -50,6 +50,8 @@ using namespace std;
 #define numberOfShapes (4) // total number of wave shapes implemented
 #define maxVoices (8)  // maximum number of oscillators per stack
 
+#define baseFrequency (20)  /* starting frequency of first table */
+
 struct waveTable {
     double topFreq;
     int waveTableLen;
@@ -57,7 +59,7 @@ struct waveTable {
 };
 
 struct perNoteData {
-    double mPhasor = 0.0;       // phase accumulator
+    double mPhasor = randomFloat(0.0, 1.0);       // phase accumulator
     double mPhaseInc = 0.0;     // phase increment
     int mCurWaveTable = 0;      // current table, based on current frequency
 };
@@ -104,9 +106,7 @@ public:
 
     void randomisePhases() {
         for (auto& note : notes) {
-            if (note.mPhaseInc != 0) {
-                note.mPhasor = randomFloat(0.0, 1.0);
-            }
+            note.mPhasor = randomFloat(0.0, 1.0);
         }
     }
 
@@ -186,10 +186,11 @@ class WaveTableOscStack {
 public:
 
     WaveTableOscStack() {
-        WaveTableOsc newOsc;
         for (int n = 0; n < maxVoices; n++) {
+            WaveTableOsc newOsc;
             mOscillators.push_back(newOsc);
         }
+        //randomiseAllPhases();
     }
 
     ~WaveTableOscStack(void) {
@@ -262,6 +263,13 @@ protected:
     {-1.0, -1.0 + 2.0 / 7.0, -1.0 + 4.0 / 7.0, -1.0 + 6.0 / 7.0, 1.0 - 6.0 / 7.0, 1.0 - 4.0 / 7.0, 1.0 - 2.0 / 7.0, 1.0}
     };
 };
+
+vector<vector<waveTable>> templateTables(numberOfShapes);
+
+#define maxOscStacks (3)
+int numberOfOscStacks = 1;
+
+vector<WaveTableOscStack> oscStacks;
 
 void fft(int N, vector<myFloat>& ar, vector<myFloat>& ai);
 void defineSine(int len, vector<myFloat>& ar, vector<myFloat>& ai);

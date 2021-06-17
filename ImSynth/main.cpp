@@ -40,74 +40,15 @@ static void glfw_error_callback(int error, const char* description)
     #define M_PI  (3.14159265)
 #endif
 
-#define baseFrequency (20)  /* starting frequency of first table */
-
-vector<vector<waveTable>> templateTables(numberOfShapes);
-
-int maxOscStacks = 3;
-int numberOfOscStacks = 1;
-
-vector<WaveTableOscStack> oscStacks;
-
 bool soundOn = true;
 float gAmplitude = 0.02f;
 unsigned int audioOutChannels = 2;
 
-bool holdNote = false;
+//bool holdNote = false;
 //bool retrig = false;
-bool keyPressed[noOfMIDINotes] = { 0 };
-int prevNoteActive = midiNone;
-int prevNote = midiNone;
-
-//// Force a push of frequencies (ie. after oscillators have been reset again)
-//void pushFreqs()
-//{
-//    for (int n = 0; n < noOfMIDINotes; n++) {
-//        if (keyPressed[n] || holdNote) {
-//            double freq = midiPitches[prevNote];
-//            //vector<double> freqs(maxPolyphony);
-//            //freqs[0] = freq / SAMPLE_RATE;
-//
-//            for (int i = 0; i < numberOfOscStacks; i++) {
-//                oscStacks[i].setFrequencies(freq / SAMPLE_RATE, 0);
-//            }
-//
-//            break;
-//        }
-//    }
-//}
-
-//bool pianoCallback(void* UserData, int Msg, int Key, float Vel)
-//{
-//    if ((Key > 108) || (Key < 21)) return false; // midi max keys
-//    if (Msg == NoteGetStatus) return keyPressed[Key];
-//    //if (Msg == NoteOn) { KeyPressed[Key] = true; Send_Midi_NoteOn(Key, Vel * 127); }
-//    //if (Msg == NoteOff) { KeyPressed[Key] = false; Send_Midi_NoteOff(Key, Vel * 127); }
-//    if (Msg == NoteOn) {
-//        for (int n = 0; n < noOfMIDINotes; n++) {
-//            keyPressed[n] = false;
-//        }
-//        keyPressed[Key] = true; soundOn = true;
-//        double freq = midiPitches[Key];
-//        for (int n = 0; n < numberOfOscStacks; n++) {
-//            //oscStacks[n].setFrequencies(freq / SAMPLE_RATE);
-//            vector<double> freqs(maxPolyphony);
-//            freqs[0] = freq / SAMPLE_RATE;
-//            //freqs[1] = freqs[0] * 2;
-//            oscStacks[n].setAllFrequencies(freqs);
-//        }
-//    }
-//    if (Msg == NoteOff) {
-//        keyPressed[Key] = false;
-//        if (holdNote) {
-//            soundOn = true;
-//        }
-//        else {
-//            soundOn = false;
-//        }
-//    }
-//    return false;
-//}
+//bool keyPressed[noOfMIDINotes] = { 0 };
+//int prevNoteActive = midiNone;
+//int prevNote = midiNone;
 
 void pushFreq(int key, int noteIndex)
 {
@@ -121,32 +62,6 @@ void pushAllFreqs()
     for (int i = 0; i < keyBuffer.size(); i++) {
         pushFreq(keyBuffer[i], i);
     }
-}
-
-bool pianoCallback(void* UserData, int Msg, int Key, float Vel)
-{
-    if ((Key > 108) || (Key < 21)) return false; // midi max keys
-    //if (Msg == NoteGetStatus) return keyPressed[Key];
-    if (Msg == NoteOn) {
-        // if this key is not in the buffer
-        if (findKeyInBuffer(Key) == maxPolyphony) {
-            // if there is space in the buffer
-            int slot = findKeyInBuffer(midiNone);
-            if (slot != maxPolyphony) {
-                pushFreq(Key, slot);
-                keyBuffer[slot] = Key;
-            }
-        }
-    }
-    if (Msg == NoteOff) {
-        // if the key is in the buffer
-        int slot = findKeyInBuffer(Key);
-        if (slot != maxPolyphony) {
-            pushFreq(midiNone, slot);
-            keyBuffer[slot] = midiNone;
-        }
-    }
-    return false;
 }
 
 // Oscilloscope stuff
@@ -188,8 +103,6 @@ static int Render_Audio(const void* inputBuffer,
 
 int main(void)
 {
-    cout << keyBuffer.size() << endl;
-
     srand(time(NULL));
 
     // Setup window
@@ -286,14 +199,6 @@ int main(void)
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-        //if (prevNoteActive != midiNone) {
-        //    prevNote = prevNoteActive;
-        //}
-
-        //if (!holdNote && prevNoteActive == midiNone) {
-        //    soundOn = false;
-        //}
-
         // Poll and handle events (inputs, window resize, etc.)
         // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
         // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
@@ -365,7 +270,7 @@ int main(void)
         if (showKeyboard) {
             ImGui::Begin("Piano keyboard", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
-            ImGui_PianoKeyboard("PianoTest", ImVec2(1060, 120), &prevNoteActive, 21, 108, pianoCallback, nullptr, nullptr);
+            ImGui_PianoKeyboard("PianoTest", ImVec2(1060, 120), nullptr, 21, 108, pushFreq, nullptr, nullptr);
 
             ImGui::End();
         } else {
@@ -397,15 +302,15 @@ int main(void)
         if (showGlobal) {
             ImGui::Begin("Global", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
-            ImGui::Checkbox("Hold note", &holdNote);
+            //ImGui::Checkbox("Hold note", &holdNote);
             ImGui::SliderFloat("Amplitude", &gAmplitude, 0.0, 0.1);
-            if (holdNote) {
-                ImGui::Text("Active note: %s", &(MIDI_number_to_name[prevNote])[0]);
-            } else if (soundOn) {
-                ImGui::Text("Active note: %s", &(MIDI_number_to_name[prevNoteActive])[0]);
-            } else {
-                ImGui::Text("Active note: %s", &(MIDI_number_to_name[128])[0]);
-            }
+            //if (holdNote) {
+            //    ImGui::Text("Active note: %s", &(MIDI_number_to_name[prevNote])[0]);
+            //} else if (soundOn) {
+            //    ImGui::Text("Active note: %s", &(MIDI_number_to_name[prevNoteActive])[0]);
+            //} else {
+            //    ImGui::Text("Active note: %s", &(MIDI_number_to_name[128])[0]);
+            //}
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
             ImGui::End();
