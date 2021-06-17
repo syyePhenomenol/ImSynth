@@ -1,5 +1,5 @@
 # ImSynth
-An open source wavetable synthesizer using ImGui and PortAudio.
+An open source wavetable synthesizer using ImGui and PortAudio. Very much a work in progress.
 
 This code borrows from the following:
 
